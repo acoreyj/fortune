@@ -1,6 +1,6 @@
 /*!
  * Fortune.js
- * Version 5.4.1
+ * Version 5.4.2
  * MIT License
  * http://fortune.js.org
  */
@@ -1528,6 +1528,7 @@ message.en = {
   'DeleteRecordsFail': 'Not all records specified could be deleted.',
   'UnspecifiedType': 'The type is unspecified.',
   'InvalidType': 'The requested type "{type}" is not a valid type.',
+  'InvalidLink': 'The field "{field}" does not define a link.',
   'InvalidMethod': 'The method "{method}" is unrecognized.',
   'CollisionToOne': 'Multiple records can not have the same to-one link value on the field "{field}".',
   'CollisionDuplicate': 'Duplicate ID "{id}" in the field "{field}".',
@@ -1752,7 +1753,8 @@ module.exports = function (context) {
       records = payload
 
       if (!records || !records.length)
-        throw new BadRequestError(message('CreateRecordsInvalid', language))
+        throw new BadRequestError(
+          message('CreateRecordsInvalid', language))
 
       type = context.request.type
       meta = context.request.meta
@@ -1806,7 +1808,8 @@ module.exports = function (context) {
 
       // Adapter must return something.
       if (!createdRecords.length)
-        throw new BadRequestError(message('CreateRecordsFail', language))
+        throw new BadRequestError(
+          message('CreateRecordsFail', language))
 
       records = createdRecords
 
@@ -1821,7 +1824,8 @@ module.exports = function (context) {
 
         // Each created record must have an ID.
         if (!(primaryKey in record))
-          throw new Error(message('CreateRecordMissingID', language))
+          throw new Error(
+            message('CreateRecordMissingID', language))
 
         for (k = 0, l = links.length; k < l; k++) {
           field = links[k]
@@ -2146,6 +2150,7 @@ var promise = require('../common/promise')
 var map = require('../common/array/map')
 var find = require('../common/array/find')
 var reduce = require('../common/array/reduce')
+var message = require('../common/message')
 
 var errors = require('../common/errors')
 var BadRequestError = errors.BadRequestError
@@ -2168,6 +2173,7 @@ module.exports = function include (context) {
   var ids = request.ids || []
   var include = request.include
   var meta = request.meta
+  var language = meta.language
   var response = context.response
   var transaction = context.transaction
   var records = response.records
@@ -2237,14 +2243,15 @@ module.exports = function include (context) {
 
       return ensureFields
         .then(function (records) {
-        // `cursor` refers to the current collection of records.
           return reduce(fields, function (records, field, index) {
+            // `cursor` refers to the current collection of records.
             return records.then(function (cursor) {
               currentField = recordTypes[currentType][field]
 
               if (!currentType || !currentField) return []
-              if (!(linkKey in currentField)) throw new BadRequestError(
-                'The field "' + field + '" does not define a link.')
+              if (!(linkKey in currentField))
+                throw new BadRequestError(
+                  message('InvalidLink', language, { field: field }))
 
               currentCache = {}
               currentType = currentField[linkKey]
@@ -2342,7 +2349,7 @@ function matchId (id) {
   }
 }
 
-},{"../common/array/find":8,"../common/array/map":10,"../common/array/reduce":12,"../common/errors":20,"../common/keys":24,"../common/promise":27}],36:[function(require,module,exports){
+},{"../common/array/find":8,"../common/array/map":10,"../common/array/reduce":12,"../common/errors":20,"../common/keys":24,"../common/message":25,"../common/promise":27}],36:[function(require,module,exports){
 'use strict'
 
 var promise = require('../common/promise')
@@ -3759,21 +3766,22 @@ module.exports = function enforce (type, record, fields, meta) {
 function checkValue (field, key, value, meta) {
   var language = meta.language
   var check
+  var type = field[typeKey]
 
   // Skip `null` case.
   if (value === null) return
 
   check = find(checkInput, function (pair) {
-    return pair[0] === field[typeKey]
+    return pair[0] === type
   })
   if (check) check = check[1]
-  else check = field[typeKey]
+  else check = type
 
   // Fields may be nullable, but if they're defined, then they must be defined
   // properly.
   if (!check(value)) throw new BadRequestError(
     message(field[isArrayKey] ? 'EnforceValueArray' : 'EnforceValue',
-      language, { key: key, type: field[typeKey].name }))
+      language, { key: key, type: type.displayName || type.name }))
 }
 
 
